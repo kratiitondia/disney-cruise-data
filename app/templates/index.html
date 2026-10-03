@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Disney Cruise Data</title>
+<style>
+  :root { --bg:#f6f7fb; --card:#fff; --ink:#1b2340; --muted:#667; --line:#e3e6ef; --accent:#2a4bd7; --accent-soft:#e8edff; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0f1426; --card:#171d33; --ink:#e8ebf7; --muted:#9aa3c2; --line:#272f4d; --accent:#8fa5ff; --accent-soft:#222b52; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:24px 16px 48px; background:var(--bg); color:var(--ink); font:14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width:1280px; margin:0 auto; }
+  h1 { margin:0 0 4px; font-size:1.6rem; }
+  .sub { color:var(--muted); margin:0 0 20px; }
+  .tiles { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:12px; margin-bottom:20px; }
+  .tile { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; }
+  .tile b { display:block; font-size:1.7rem; font-variant-numeric:tabular-nums; }
+  .tile span { color:var(--muted); font-size:.85rem; }
+  .bar { display:flex; gap:12px; flex-wrap:wrap; align-items:center; margin-bottom:12px; }
+  input[type=search] { flex:1 1 260px; padding:10px 12px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--ink); font:inherit; }
+  .count { color:var(--muted); }
+  .wrap { overflow-x:auto; background:var(--card); border:1px solid var(--line); border-radius:10px; }
+  table { border-collapse:collapse; width:100%; }
+  th, td { padding:9px 12px; text-align:left; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { position:sticky; top:0; background:var(--card); cursor:pointer; white-space:nowrap; user-select:none; font-size:.8rem; text-transform:uppercase; letter-spacing:.03em; color:var(--muted); }
+  th.sorted { color:var(--accent); }
+  th.sorted::after { content:" \25B2"; }
+  th.sorted.desc::after { content:" \25BC"; }
+  td.num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  td.loc { min-width:260px; }
+  .tag { display:inline-block; padding:2px 8px; border-radius:999px; background:var(--accent-soft); color:var(--accent); font-size:.78rem; white-space:nowrap; }
+  .muted { color:var(--muted); }
+  footer { margin-top:16px; color:var(--muted); font-size:.8rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Disney Cruise Line &mdash; India listings</h1>
+  <p class="sub">Scraped from disneycruise.disney.go.com/en-in &middot; prices in INR for 2 guests &middot; data source: {{ source }}</p>
+
+  <section class="tiles">
+    <div class="tile"><b>{{ stats.cards }}</b><span>Distinct cruise cards</span></div>
+    <div class="tile"><b>{{ stats.sailings }}</b><span>Total sailings (dates)</span></div>
+    <div class="tile"><b>{{ stats.holiday }}</b><span>Holiday cruises</span></div>
+    <div class="tile"><b>{{ stats.multi_date }}</b><span>With more than 2 dates</span></div>
+    <div class="tile"><b>{{ stats.ports }}</b><span>Departure ports</span></div>
+  </section>
+
+  <div class="bar">
+    <input type="search" id="q" placeholder="Search title, port, location, banner..." aria-label="Search cruises">
+    <span class="count" id="count"></span>
+  </div>
+
+  <div class="wrap">
+    <table id="t">
+      <thead>
+        <tr>
+          <th data-k="title">Title</th>
+          <th data-k="nights" data-n="1">Nights</th>
+          <th data-k="banner">Banner</th>
+          <th data-k="offer">Offer</th>
+          <th data-k="departure_port">Departure port</th>
+          <th data-k="locations">Locations</th>
+          <th data-k="price_inr" data-n="1">Price (INR)</th>
+          <th data-k="dates_count" data-n="1">Dates</th>
+          <th data-k="note">Note</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for r in rows %}
+        <tr data-s="{{ (r.title ~ ' ' ~ r.banner ~ ' ' ~ r.offer ~ ' ' ~ r.departure_port ~ ' ' ~ r.locations ~ ' ' ~ r.note)|lower|e }}">
+          <td>{{ r.title }}</td>
+          <td class="num" data-v="{{ r.nights }}">{{ r.nights }}</td>
+          <td>{% if r.banner == 'No Banner' %}<span class="muted">{{ r.banner }}</span>{% else %}<span class="tag">{{ r.banner }}</span>{% endif %}</td>
+          <td>{% if r.offer == 'No Offer' %}<span class="muted">{{ r.offer }}</span>{% else %}{{ r.offer }}{% endif %}</td>
+          <td>{{ r.departure_port }}</td>
+          <td class="loc">{{ r.locations }}</td>
+          <td class="num" data-v="{{ r.price_inr }}">{{ r.price_text }}</td>
+          <td class="num" data-v="{{ r.dates_count }}">{{ r.dates_count }}</td>
+          <td>{% if r.note == 'No Note' %}<span class="muted">{{ r.note }}</span>{% else %}{{ r.note }}{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <footer>Header on the site reads &ldquo;948 Cruises&rdquo; because it counts sailings (every date); the table lists each distinct cruise card once.</footer>
+</main>
+
+<script>
+(function () {
+  var tbody = document.querySelector('#t tbody');
+  var rows = Array.prototype.slice.call(tbody.rows);
+  var q = document.getElementById('q'), count = document.getElementById('count');
+  var heads = Array.prototype.slice.call(document.querySelectorAll('#t th'));
+
+  function filter() {
+    var term = q.value.trim().toLowerCase(), shown = 0;
+    rows.forEach(function (r) {
+      var ok = !term || r.dataset.s.indexOf(term) !== -1;
+      r.hidden = !ok;
+      if (ok) shown++;
+    });
+    count.textContent = shown + ' of ' + rows.length + ' cruises';
+  }
+
+  function sortBy(i, numeric, dir) {
+    rows.sort(function (a, b) {
+      var x = a.cells[i].dataset.v || a.cells[i].textContent.trim();
+      var y = b.cells[i].dataset.v || b.cells[i].textContent.trim();
+      var c = numeric ? (+x) - (+y) : x.localeCompare(y);
+      return dir * c;
+    });
+    rows.forEach(function (r) { tbody.appendChild(r); });
+  }
+
+  heads.forEach(function (th, i) {
+    th.addEventListener('click', function () {
+      var desc = th.classList.contains('sorted') && !th.classList.contains('desc');
+      heads.forEach(function (h) { h.classList.remove('sorted', 'desc'); });
+      th.classList.add('sorted');
+      if (desc) th.classList.add('desc');
+      sortBy(i, !!th.dataset.n, desc ? -1 : 1);
+    });
+  });
+
+  q.addEventListener('input', filter);
+  filter();
+})();
+</script>
+</body>
+</html>
